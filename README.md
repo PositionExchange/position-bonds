@@ -1,7 +1,5 @@
 # Position Exchange Bond
 
-Project Requirements: https://technixocom.atlassian.net/wiki/spaces/PWA/pages/315457537/Position+Bonds
-
 Install dependencies:
 ```shell
 yarn .
