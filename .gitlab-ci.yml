@@ -1,0 +1,19 @@
+image: node:14-alpine
+
+stages:
+  - testing
+
+unitest:
+  stage: testing
+  image: node:14-alpine
+  script:
+    - git rm -r --cached .
+    - yarn install
+    - yarn hardhat compile
+    - yarn hardhat test
+  # only:
+  #   - main
+  #   - develop
+  #   - /^feature\/.*$/
+  #   - /^debug\/.*$/
+  #   - /^hotfix\/.*$/
