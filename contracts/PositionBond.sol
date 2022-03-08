@@ -103,7 +103,7 @@ abstract contract PositionBond is
     /**
      * @dev see {IPositionBond-claimFaceValue}
      */
-    function claimFaceValue() external onlyMatured onlyReadyToClaim nonReentrant {
+    function claimFaceValue() external onlyMatured onlyReadyToClaimFaceValue nonReentrant {
         uint256 _bondBalance = balanceOf(msg.sender);
         require(_bondBalance != 0, "invalid bond balance");
         _burn(msg.sender, _bondBalance);
@@ -115,7 +115,7 @@ abstract contract PositionBond is
      */
     function claimRemainderUnderlyingAsset()
         external
-        onlyReachActiveTime
+        onlyActive
         onlyIssuer
     {
         UnderlyingAsset._transferRemainderUnderlyingAsset(

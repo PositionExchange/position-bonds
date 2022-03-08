@@ -18,8 +18,8 @@ abstract contract BondUnit is ERC20 {
     }
 
     function _mint(address account, uint256 amount) internal override(ERC20) {
-        require(totalSupply() <= bondSupply, "over supply");
         super._mint(account, amount);
+        require(totalSupply() <= bondSupply , "over supply");
     }
 
     function _beforeTokenTransfer(

@@ -67,7 +67,7 @@ describe("PositionBond", async () => {
 
     describe(" liquidation deadline ", async  ()=> {
         it('should get liquidation deadline', async function () {
-            expect((await positionBond.getLiquidationDeadline())  ).equal(180)
+            expect((await positionBond.getLiquidationDeadline())).equal(1296000)
         });
     })
 
@@ -76,6 +76,13 @@ describe("PositionBond", async () => {
             await positionBond.mockIssuePrice(toWei(1.5))
             await expectEqual(positionBond.issuePrice(), toWei(1.5))
         });
+    })
+
+    describe("should active fail cause transfer reverted", async () => {
+        it("should revert", async () => {
+            await mockCollateralToken.transfer(user5.address, await mockCollateralToken.balanceOf(issuer.address))
+            await expect(positionBond.active(startSale, active, maturity)).to.be.revertedWith("ERC20: transfer amount exceeds balance")
+        })
     })
 
     describe(" claim underlyingAsset ", async () => {
@@ -122,7 +129,6 @@ describe("PositionBond", async () => {
     describe(" claim face value ", async () => {
         it("should repay success", async () => {
             await positionBond.active(3000, 5000, 6000);
-
             const mockBondAmount = toWei(10000)
 
             await positionBond.mockBondAmount(mockBondAmount)
@@ -130,7 +136,6 @@ describe("PositionBond", async () => {
 
             // purchase success after start sale time
             await positionBond.setMockTime(4000)
-
             await expectERC20Balance(
                 mockFaceToken,
                 [positionBond.address, user1.address],
@@ -139,7 +144,6 @@ describe("PositionBond", async () => {
 
             // expect bond unit of user before matured
             await expectBalanceOfToken(positionBond, user1.address, mockBondAmount)
-
             await positionBond.setMockTime(6100)
             await positionBond.setUnderlyingAssetStatusReadyToClaimMock();
             await positionBond.setUnderlyingAssetStatusRefundedMock();
@@ -149,7 +153,6 @@ describe("PositionBond", async () => {
                 [positionBond.address, user1.address],
                 [-10000, 10000],
                 async () => await positionBond.connect(user1).claimFaceValue())
-
             // expect bond unit of user after matured
             await expectBalanceOfToken(positionBond, user1.address, BigNumber.from(0))
 
@@ -196,7 +199,7 @@ describe("PositionBond", async () => {
 
             // try claim face value after matured time
             await positionBond.setMockTime(maturity + 1)
-            await expect(positionBond.connect(user1).claimFaceValue()).to.be.revertedWith("only refunded")
+            await expect(positionBond.connect(user1).claimFaceValue()).to.be.revertedWith("only ready to claim face value")
         });
     })
 
@@ -298,7 +301,8 @@ describe("PositionBond", async () => {
             await expect(positionBond.repay()).to.be.revertedWith("only matured")
             await positionBond.setMockTime(maturity + 1)
             await expect(positionBond.repay()).to.be.not.revertedWith("only matured")
-            await positionBond.setMockTime(liquidated)
+            const liquidationTime = maturity + Number(await positionBond.getLiquidationDeadline()) + 1
+            await positionBond.setMockTime(liquidationTime)
             await expect(positionBond.repay()).to.be.revertedWith("only not reach liquidation time")
         });
         it('should repay successfully and update underlying asset status is 3 (ready to claim)', async function () {
@@ -355,7 +359,8 @@ describe("PositionBond", async () => {
             await expectMultiERC20Balance(expectedMapClaimSold, async () => await positionBond.connect(issuer).claimSoldAmount(mockBondAmountInWei))
 
             // try to repay after liquidated time but fail
-            await positionBond.setMockTime(maturity + 86400)
+            const liquidationTime = maturity + Number(await positionBond.getLiquidationDeadline()) + 1
+            await positionBond.setMockTime(liquidationTime)
 
             await expect(positionBond.connect(issuer).repay()).to.be.revertedWith("only not reach liquidation time")
         });
@@ -542,7 +547,10 @@ describe("PositionBond", async () => {
             await positionBond.mockCanPurchase(true)
 
             await positionBond.setMockTime(startSale + 1)
+            // User 1 buy bond
             await positionBond.connect(user1).purchase(mockBondAmountInWei)
+            // User 2 buy bond
+            await positionBond.connect(user2).purchase(mockBondAmountInWei)
 
             await positionBond.setMockTime(maturity + 1)
             await positionBond.setUnderlyingAssetStatusLiquidatedMock()
@@ -550,11 +558,18 @@ describe("PositionBond", async () => {
 
             const expectedCollateralClaimed = mockBondAmount * collateralAmount / totalSupplyBond
 
-            let expectedMap = new Map<IERC20, ExpectErc20Detail[]>()
-            expectedMap = await setDataForExpectedMap(expectedMap, positionBond, [user1.address], [-mockBondAmount])
-            expectedMap = await setDataForExpectedMap(expectedMap, mockCollateralToken, [user1.address, positionBond.address], [expectedCollateralClaimed, -expectedCollateralClaimed])
+            let expectedMapUser1 = new Map<IERC20, ExpectErc20Detail[]>()
+            expectedMapUser1 = await setDataForExpectedMap(expectedMapUser1, positionBond, [user1.address], [-mockBondAmount])
+            expectedMapUser1 = await setDataForExpectedMap(expectedMapUser1, mockCollateralToken, [user1.address, positionBond.address], [expectedCollateralClaimed, -expectedCollateralClaimed])
 
-            await expectMultiERC20Balance(expectedMap, async () => await positionBond.connect(user1).claimLiquidatedUnderlyingAsset())
+            await expectMultiERC20Balance(expectedMapUser1, async () => await positionBond.connect(user1).claimLiquidatedUnderlyingAsset())
+
+            let expectedMapUser2 = new Map<IERC20, ExpectErc20Detail[]>()
+            expectedMapUser2 = await setDataForExpectedMap(expectedMapUser2, positionBond, [user2.address], [-mockBondAmount])
+            expectedMapUser2 = await setDataForExpectedMap(expectedMapUser2, mockCollateralToken, [user2.address, positionBond.address], [expectedCollateralClaimed, -expectedCollateralClaimed])
+
+            await expectMultiERC20Balance(expectedMapUser2, async () => await positionBond.connect(user2).claimLiquidatedUnderlyingAsset())
+
         })
     })
 
@@ -573,7 +588,7 @@ describe("PositionBond", async () => {
 
             await positionBond.setMockTime(startSale + 1)
 
-            await expect(positionBond.connect(issuer).claimRemainderUnderlyingAsset()).to.be.revertedWith("only reach active time")
+            await expect(positionBond.connect(issuer).claimRemainderUnderlyingAsset()).to.be.revertedWith("only active")
 
             await positionBond.connect(user1).purchase(mockBondAmountInWei)
 

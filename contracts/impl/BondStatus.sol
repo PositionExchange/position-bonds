@@ -58,6 +58,11 @@ abstract contract BondStatus {
         _;
     }
 
+    modifier onlyReadyToClaimFaceValue() {
+        require(_isReadyToClaim() || _isRefunded(), "only ready to claim face value");
+        _;
+    }
+
     modifier onlyLiquidated() {
         require(_isLiquidated(), "only liquidated");
         _;
